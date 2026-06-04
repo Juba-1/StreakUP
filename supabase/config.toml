@@ -1,0 +1,29 @@
+# Minimal Supabase CLI configuration for local development and deployments.
+# Docs: https://supabase.com/docs/guides/cli/config
+
+# Set your real project ref with: supabase link
+# project_id = "your-project-ref"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+[functions.record-visit]
+verify_jwt = false
+
+[functions.ai-router]
+verify_jwt = false
+
+[functions.invite-staff]
+verify_jwt = false
+
+[functions.admin-provision-tenant]
+verify_jwt = false
+
+[functions.admin-manage-tenant]
+verify_jwt = false
+
+[functions.dispatch-webhooks]
+verify_jwt = false
