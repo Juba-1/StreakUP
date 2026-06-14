@@ -7,13 +7,16 @@
 --   visits_select_scoped used EXISTS (SELECT FROM customers …)
 --   → mutual RLS re-entry → "infinite recursion detected in policy"
 --
--- Fix: cross-table checks via SECURITY DEFINER helpers (no RLS on inner reads).
+-- Fix:
+--   customers SELECT — cafe-scoped for all staff (no cross-table read)
+--   visits SELECT — staff by branch/cafe; customers via auth_user_id only
+--   Helpers — SECURITY DEFINER profile lookups (non-recursive)
 -- =============================================================================
 
 begin;
 
 -- -----------------------------------------------------------------------------
--- Non-recursive auth context helpers (read profiles only — profiles RLS is safe)
+-- Non-recursive auth context helpers (read profiles only)
 -- -----------------------------------------------------------------------------
 create or replace function public.streakup_my_role()
 returns public.streakup_role
@@ -54,45 +57,6 @@ as $$
   limit 1;
 $$;
 
--- -----------------------------------------------------------------------------
--- Cross-table helpers — SECURITY DEFINER bypasses RLS (breaks the loop)
--- -----------------------------------------------------------------------------
-create or replace function public.streakup_customer_owned_by_auth(p_customer_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select exists (
-    select 1
-    from public.customers c
-    where c.id = p_customer_id
-      and c.auth_user_id = auth.uid()
-  );
-$$;
-
-create or replace function public.streakup_customer_has_visit_at_branch(
-  p_customer_id uuid,
-  p_branch_id   uuid
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select
-    p_customer_id is not null
-    and p_branch_id is not null
-    and exists (
-      select 1
-      from public.visits v
-      where v.customer_id = p_customer_id
-        and v.branch_id = p_branch_id
-    );
-$$;
-
 revoke all on function public.streakup_my_role() from public;
 grant execute on function public.streakup_my_role() to authenticated;
 
@@ -102,14 +66,8 @@ grant execute on function public.streakup_my_cafe_id() to authenticated;
 revoke all on function public.streakup_my_branch_id() from public;
 grant execute on function public.streakup_my_branch_id() to authenticated;
 
-revoke all on function public.streakup_customer_owned_by_auth(uuid) from public;
-grant execute on function public.streakup_customer_owned_by_auth(uuid) to authenticated;
-
-revoke all on function public.streakup_customer_has_visit_at_branch(uuid, uuid) from public;
-grant execute on function public.streakup_customer_has_visit_at_branch(uuid, uuid) to authenticated;
-
 -- -----------------------------------------------------------------------------
--- customers — drop recursive policies, recreate safe versions
+-- customers — no cross-table reads (breaks the loop)
 -- -----------------------------------------------------------------------------
 drop policy if exists customers_select_scoped on public.customers;
 
@@ -121,16 +79,12 @@ using (
   public.streakup_is_super_admin()
   or auth_user_id = auth.uid()
   or (
-    public.streakup_my_role() = 'hq_owner'::public.streakup_role
-    and cafe_id = public.streakup_my_cafe_id()
-  )
-  or (
-    public.streakup_my_role() = 'branch_manager'::public.streakup_role
-    and cafe_id = public.streakup_my_cafe_id()
-    and public.streakup_customer_has_visit_at_branch(
-      customers.id,
-      public.streakup_my_branch_id()
+    public.streakup_my_role() in (
+      'hq_owner'::public.streakup_role,
+      'branch_manager'::public.streakup_role,
+      'cashier'::public.streakup_role
     )
+    and cafe_id = public.streakup_my_cafe_id()
   )
 );
 
@@ -143,35 +97,24 @@ to authenticated
 using (
   public.streakup_is_super_admin()
   or (
-    public.streakup_my_role() = 'hq_owner'::public.streakup_role
-    and cafe_id = public.streakup_my_cafe_id()
-  )
-  or (
-    public.streakup_my_role() = 'branch_manager'::public.streakup_role
-    and cafe_id = public.streakup_my_cafe_id()
-    and public.streakup_customer_has_visit_at_branch(
-      customers.id,
-      public.streakup_my_branch_id()
+    public.streakup_my_role() in (
+      'hq_owner'::public.streakup_role,
+      'branch_manager'::public.streakup_role
     )
+    and cafe_id = public.streakup_my_cafe_id()
   )
 )
 with check (
   public.streakup_is_super_admin()
   or (
-    public.streakup_my_role() = 'hq_owner'::public.streakup_role
-    and cafe_id = public.streakup_my_cafe_id()
-  )
-  or (
-    public.streakup_my_role() = 'branch_manager'::public.streakup_role
-    and cafe_id = public.streakup_my_cafe_id()
-    and public.streakup_customer_has_visit_at_branch(
-      customers.id,
-      public.streakup_my_branch_id()
+    public.streakup_my_role() in (
+      'hq_owner'::public.streakup_role,
+      'branch_manager'::public.streakup_role
     )
+    and cafe_id = public.streakup_my_cafe_id()
   )
 );
 
--- Keep HQ insert/update policies but use non-recursive profile helpers
 drop policy if exists customers_insert_super_or_hq on public.customers;
 
 create policy customers_insert_super_or_hq
@@ -208,7 +151,7 @@ with check (
 );
 
 -- -----------------------------------------------------------------------------
--- visits — drop recursive SELECT policy, recreate safe version
+-- visits — customer check uses auth_user_id on customers (one-way, no loop)
 -- -----------------------------------------------------------------------------
 drop policy if exists visits_select_scoped on public.visits;
 
@@ -229,7 +172,12 @@ using (
     )
     and branch_id = public.streakup_my_branch_id()
   )
-  or public.streakup_customer_owned_by_auth(visits.customer_id)
+  or exists (
+    select 1
+    from public.customers c
+    where c.id = visits.customer_id
+      and c.auth_user_id = auth.uid()
+  )
 );
 
 commit;
