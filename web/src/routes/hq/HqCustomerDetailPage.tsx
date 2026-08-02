@@ -74,8 +74,8 @@ export function HqCustomerDetailPage() {
   })
 
   const lifetimeQuery = useQuery({
-    queryKey: ['hq-lifetime-rewards', customerId],
-    enabled: Boolean(supabaseBrowserClient && customerId),
+    queryKey: ['hq-lifetime-rewards', customerId, cafeId],
+    enabled: Boolean(supabaseBrowserClient && customerId && cafeId),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc('hq_list_customer_lifetime_rewards_secure', {
         p_customer_id: customerId!,
@@ -100,7 +100,7 @@ export function HqCustomerDetailPage() {
       if (!o?.ok) throw new Error(o?.reason ?? 'reset_failed')
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['hq-lifetime-rewards', customerId] })
+      await qc.invalidateQueries({ queryKey: ['hq-lifetime-rewards', customerId, cafeId] })
       toast.success(t('hq.customerDetail.resetSuccess'))
     },
     onError: () => toast.error(t('hq.customerDetail.resetFail')),

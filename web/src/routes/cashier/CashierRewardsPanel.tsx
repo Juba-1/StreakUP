@@ -149,7 +149,7 @@ export function CashierRewardsPanel({
               onClick={() => void redeem.mutateAsync(r.reward_id)}
               className={cn(
                 'shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition',
-                'bg-[linear-gradient(135deg,#f59e0b,#f97316)] text-black shadow-[0_0_24px_-8px_rgba(245,158,11,0.8)]',
+                'bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-secondary))] text-black shadow-[0_0_24px_-8px_var(--brand-glow)]',
                 'hover:opacity-90 disabled:opacity-50',
               )}
             >

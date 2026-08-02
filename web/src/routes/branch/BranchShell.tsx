@@ -60,6 +60,11 @@ export function BranchShell() {
     return <BranchWrongRoleScreen />
   }
 
+  // A branch_manager without an assigned branch can never resolve one — fail fast.
+  if (!profile.branch_id) {
+    return <p className="text-muted-foreground text-sm">{t('branch.notFound')}</p>
+  }
+
   if (branchQuery.isLoading) {
     return (
       <div className="space-y-3">

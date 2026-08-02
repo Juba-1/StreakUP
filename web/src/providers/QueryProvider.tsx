@@ -4,7 +4,7 @@ import { QueryClient, defaultShouldDehydrateQuery } from '@tanstack/react-query'
 import { del, get, set } from 'idb-keyval'
 import { type ReactNode, useMemo, useState } from 'react'
 
-const PERSIST_KEY = 'streakup.rq.v1'
+import { QUERY_PERSIST_KEY } from '@/lib/clearTenantQueryCaches'
 
 const idbStorage = {
   getItem: async (key: string) => {
@@ -19,20 +19,11 @@ const idbStorage = {
   },
 }
 
+/** Persist only identity/bootstrap keys — still cleared on sign-out. */
 function shouldPersistQueryKey(queryKey: readonly unknown[]) {
   const head = queryKey[0]
   if (typeof head !== 'string') return false
-  return (
-    head === 'profile' ||
-    head === 'staff-dashboard-path' ||
-    head === 'branch-portal' ||
-    head === 'branch-visits' ||
-    head === 'cashier-branch' ||
-    head === 'hq-cafe' ||
-    head === 'hq-stats' ||
-    head === 'cafe-public' ||
-    head === 'cashier-branding'
-  )
+  return head === 'profile' || head === 'staff-dashboard-path' || head === 'cafe-public'
 }
 
 export function QueryProvider({ children }: { children: ReactNode }) {
@@ -56,7 +47,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
     () =>
       createAsyncStoragePersister({
         storage: typeof window === 'undefined' ? undefined : idbStorage,
-        key: PERSIST_KEY,
+        key: QUERY_PERSIST_KEY,
         throttleTime: 2000,
       }),
     [],

@@ -100,7 +100,7 @@ function parsePortal(data: unknown): PortalOk | null {
 
 export function MyStreakHomePage() {
   const { slug } = useParams()
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const { data: branding, isLoading: brandingLoading } = useCafePublicProfile(slug)
 
   const [phone, setPhone] = useState('')
@@ -451,16 +451,16 @@ export function MyStreakHomePage() {
   const legalLinks = useMemo(() => {
     const terms = (
       <Link to="/terms" className="font-semibold text-(--brand-primary) underline-offset-2 hover:underline">
-        {locale === 'ar' ? 'شروط الاستخدام' : 'Terms of Service'}
+        {t('legal.consent.terms')}
       </Link>
     )
     const privacy = (
       <Link to="/privacy" className="font-semibold text-(--brand-primary) underline-offset-2 hover:underline">
-        {locale === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+        {t('legal.consent.privacy')}
       </Link>
     )
     return { terms, privacy }
-  }, [locale])
+  }, [t])
 
   const handleLockSession = useCallback(() => {
     setSession(null)
@@ -668,15 +668,8 @@ export function MyStreakHomePage() {
               {/* Legacy inline name step retained, but new users register via modal. */}
               {step === 'phone' ? (
                 <p className={cn('text-[11px] leading-relaxed', portalTextMuted)}>
-                  {locale === 'ar' ? (
-                    <>
-                      بالمتابعة، أنت توافق على {legalLinks.terms} و{legalLinks.privacy}.
-                    </>
-                  ) : (
-                    <>
-                      By continuing, you agree to the {legalLinks.terms} and {legalLinks.privacy}.
-                    </>
-                  )}
+                  {t('legal.consent.prefix')} {legalLinks.terms} {t('legal.consent.and')}{' '}
+                  {legalLinks.privacy}
                 </p>
               ) : null}
               <motion.button
@@ -1030,13 +1023,9 @@ export function MyStreakHomePage() {
       <Dialog open={registrationOpen} onOpenChange={setRegistrationOpen}>
         <DialogContent className="border-white/10 bg-zinc-950/92 text-white">
           <DialogHeader>
-            <DialogTitle>
-              {locale === 'ar' ? 'إكمال التسجيل' : 'Complete registration'}
-            </DialogTitle>
+            <DialogTitle>{t('myStreak.register.title')}</DialogTitle>
             <DialogDescription className="text-white/60">
-              {locale === 'ar'
-                ? 'أدخل اسمك ووافق على الشروط لإكمال التسجيل.'
-                : 'Enter your name and accept the legal terms to finish signing up.'}
+              {t('myStreak.register.body')}
             </DialogDescription>
           </DialogHeader>
 
@@ -1075,19 +1064,15 @@ export function MyStreakHomePage() {
               onClick={() => setRegistrationOpen(false)}
               disabled={registerStep.isPending}
             >
-              {locale === 'ar' ? 'إلغاء' : 'Cancel'}
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={() => void registerStep.mutateAsync()}
               disabled={registerStep.isPending || name.trim().length < 2 || !legalConsent}
             >
               {registerStep.isPending
-                ? locale === 'ar'
-                  ? 'جارٍ التسجيل...'
-                  : 'Registering...'
-                : locale === 'ar'
-                  ? 'تسجيل'
-                  : 'Register'}
+                ? t('myStreak.register.pending')
+                : t('myStreak.register.submit')}
             </Button>
           </DialogFooter>
         </DialogContent>

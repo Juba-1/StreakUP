@@ -44,21 +44,25 @@ const PIN_MAX = 8
 const PIN_MIN = 4
 
 type Props = {
+  cafeSlug: string
   branchCode: string
   onUnlocked: (session: CashierDeviceSession) => void
 }
 
-export function CashierLockScreen({ branchCode, onUnlocked }: Props) {
+export function CashierLockScreen({ cafeSlug, branchCode, onUnlocked }: Props) {
   const { t } = useI18n()
   const [pin, setPin] = useState('')
   const [shake, setShake] = useState(false)
+  const slug = cafeSlug.toLowerCase()
+  const code = branchCode.toLowerCase()
 
   const branchMeta = useQuery({
-    queryKey: ['cashier-branch-public', branchCode],
-    enabled: Boolean(supabaseBrowserClient && branchCode),
+    queryKey: ['cashier-branch-public', slug, code],
+    enabled: Boolean(supabaseBrowserClient && slug && code),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc('cashier_branch_public_lookup', {
-        p_branch_code: branchCode.toLowerCase(),
+        p_cafe_slug: slug,
+        p_branch_code: code,
       })
       if (error) throw error
       return data as {
@@ -69,14 +73,14 @@ export function CashierLockScreen({ branchCode, onUnlocked }: Props) {
         branch_name?: string
         cafe_id?: string
         cafe_name?: string
+        cafe_slug?: string
       }
     },
   })
 
   const unlock = useMutation({
     mutationFn: async () => {
-      const code = branchCode.toLowerCase()
-      const subject = `device:${code}:${pin.trim()}`
+      const subject = `device:${slug}:${code}:${pin.trim()}`
       const remaining = getLockoutMsRemaining(CASHIER_PIN_WINDOW, subject)
       if (remaining > 0) {
         const err = new Error('locked') as Error & { retryMs?: number }
@@ -85,6 +89,7 @@ export function CashierLockScreen({ branchCode, onUnlocked }: Props) {
       }
 
       const { data, error } = await supabaseBrowserClient!.rpc('verify_cashier_device_pin', {
+        p_cafe_slug: slug,
         p_branch_code: code,
         p_pin: pin.trim(),
       })
@@ -98,6 +103,7 @@ export function CashierLockScreen({ branchCode, onUnlocked }: Props) {
         branch_code?: string
         branch_name?: string
         cafe_id?: string
+        cafe_slug?: string
         expires_at?: string
         retry_after_ms?: number
       }
@@ -109,8 +115,14 @@ export function CashierLockScreen({ branchCode, onUnlocked }: Props) {
           throw err
         }
         if (res?.reason === 'invalid_pin') throw new Error('invalid_pin')
-        if (res?.reason === 'branch_not_found') throw new Error('branch_not_found')
+        if (res?.reason === 'branch_not_found' || res?.reason === 'cafe_not_found') {
+          throw new Error('branch_not_found')
+        }
         throw new Error('invalid_pin')
+      }
+
+      if (res.cafe_slug && res.cafe_slug.toLowerCase() !== slug) {
+        throw new Error('branch_not_found')
       }
 
       return { res, subject }
@@ -121,7 +133,8 @@ export function CashierLockScreen({ branchCode, onUnlocked }: Props) {
       const session: CashierDeviceSession = {
         token: res.device_token!,
         branchId: res.branch_id!,
-        branchCode: res.branch_code ?? branchCode.toLowerCase(),
+        branchCode: res.branch_code ?? code,
+        cafeSlug: (res.cafe_slug ?? slug).toLowerCase(),
         branchName: res.branch_name,
         cafeId: res.cafe_id,
         expiresAt: res.expires_at ?? new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
@@ -144,8 +157,13 @@ export function CashierLockScreen({ branchCode, onUnlocked }: Props) {
         toast.error(t('cashier.branchMissing'))
         return
       }
+      // Transport failures are not "wrong PIN" — don't burn lockout attempts.
+      if (!navigator.onLine || /failed to fetch|fetch failed|networkerror|load failed/i.test(e.message ?? '')) {
+        toast.error(t('cashier.toast.network'))
+        return
+      }
 
-      const subject = `device:${branchCode.toLowerCase()}:${pin.trim()}`
+      const subject = `device:${slug}:${code}:${pin.trim()}`
       const { lockedMs } = registerFailure(CASHIER_PIN_WINDOW, subject)
       if (lockedMs > 0) {
         toast.error(t('cashier.lock.locked').replace('{seconds}', String(Math.ceil(lockedMs / 1000))))

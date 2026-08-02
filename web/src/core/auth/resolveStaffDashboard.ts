@@ -133,9 +133,13 @@ export async function resolveStaffDashboardPath(
         .eq('id', row.branch_id)
         .maybeSingle()
       if (!br?.branch_code || !br.cafe_id) return '/login'
-      const { data: cafe } = await client.from('cafes').select('status').eq('id', br.cafe_id).maybeSingle()
-      if (cafe?.status !== 'active') return '/login'
-      return `/cashier/${br.branch_code}`
+      const { data: cafe } = await client
+        .from('cafes')
+        .select('slug, status')
+        .eq('id', br.cafe_id)
+        .maybeSingle()
+      if (!cafe?.slug || cafe.status !== 'active') return '/login'
+      return `/cashier/${cafe.slug}/${br.branch_code}`
     }
     case 'customer': {
       const { data: cust } = await client.from('customers').select('cafe_id').eq('auth_user_id', userId).maybeSingle()

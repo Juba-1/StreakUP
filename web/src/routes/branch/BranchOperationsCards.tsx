@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useProfile } from '@/hooks/useProfile'
 import { normalizeCashierPin, secureDigits4 } from '@/lib/secure-pin'
 import { supabaseBrowserClient } from '@/lib/supabase/browser-client'
 import { cn } from '@/lib/utils'
@@ -39,12 +40,13 @@ type BranchContext = {
 export function BranchOperationsCards() {
   const { t } = useI18n()
   const qc = useQueryClient()
+  const { data: profile } = useProfile()
   const [showPin, setShowPin] = useState(false)
   const [pinDraft, setPinDraft] = useState('')
 
   const contextQuery = useQuery({
-    queryKey: ['branch-manager-context'],
-    enabled: Boolean(supabaseBrowserClient),
+    queryKey: ['branch-manager-context', profile?.branch_id, profile?.cafe_id],
+    enabled: Boolean(supabaseBrowserClient && profile?.branch_id),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc('branch_manager_branch_context_secure')
       if (error) throw error
@@ -85,7 +87,7 @@ export function BranchOperationsCards() {
     onSuccess: async (saved) => {
       setPinDraft(saved)
       toast.success(t('branch.ops.pinSaved'))
-      await qc.invalidateQueries({ queryKey: ['branch-manager-context'] })
+      await qc.invalidateQueries({ queryKey: ['branch-manager-context', profile?.branch_id, profile?.cafe_id] })
     },
     onError: (e: Error) =>
       toast.error(

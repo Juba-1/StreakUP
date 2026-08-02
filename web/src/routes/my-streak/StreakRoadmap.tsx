@@ -433,7 +433,11 @@ export function StreakRoadmap({ streak, milestones, claimFlashId }: Props) {
         >
           {positioned.map((stop) => (
             <TrailStopNode
-              key={`${stop.kind}-${stop.day}`}
+              key={
+                stop.kind === 'milestone'
+                  ? `milestone-${stop.milestone.id}`
+                  : `day-${stop.day}`
+              }
               stop={stop}
               streak={streak}
               hereDay={hereDay}
@@ -515,7 +519,7 @@ function TrailHeader({
       </div>
       <div className="relative mt-2 h-2 overflow-hidden rounded-full bg-[color-mix(in_oklab,var(--brand-primary)_10%,white)]">
         <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-[linear-gradient(90deg,var(--brand-primary),var(--brand-secondary))] shadow-[0_0_14px_var(--brand-glow)]"
+          className="absolute inset-y-0 start-0 rounded-full bg-[linear-gradient(90deg,var(--brand-primary),var(--brand-secondary))] shadow-[0_0_14px_var(--brand-glow)]"
           animate={{ width: `${Math.round(fillRatio * 100)}%` }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         />
@@ -866,7 +870,7 @@ function YouAreHereBadge({
     <motion.span
       className={cn(
         'inline-flex max-w-full items-center justify-center gap-1 rounded-full border border-[color-mix(in_oklab,var(--brand-primary)_40%,white)] bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-secondary))] font-bold uppercase tracking-[0.16em] text-white shadow-[0_6px_20px_-6px_var(--brand-glow)]',
-        compact ? 'px-2.5 py-1 text-[7px] sm:text-[8px]' : 'px-3 py-1 text-[8px] sm:text-[9px]',
+        compact ? 'px-2.5 py-1 text-[9px] sm:text-[10px]' : 'px-3 py-1 text-[10px]',
       )}
       animate={reduceMotion ? undefined : { scale: [1, 1.04, 1] }}
       transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
@@ -889,6 +893,7 @@ function RewardCard({
   t: (k: string) => string
 }) {
   const reduceMotion = useReducedMotion()
+  const { locale } = useI18n()
   const claimed = state === 'claimed'
   const ready = state === 'ready'
   const digital = state === 'digital'
@@ -915,7 +920,7 @@ function RewardCard({
     >
       <p
         className={cn(
-          'text-[9px] font-bold uppercase tracking-[0.22em]',
+          'text-[10px] font-bold uppercase tracking-[0.22em]',
           state === 'locked' ? portalTextMuted : claimed ? 'text-zinc-500' : 'text-(--brand-primary)',
         )}
       >
@@ -993,9 +998,8 @@ function RewardCard({
           >
             <div className="rounded-xl border-4 border-rose-600/85 bg-rose-50/90 px-4 py-2 shadow-[0_8px_32px_-8px_rgba(225,29,72,0.55)]">
               <p className="text-center text-sm font-black uppercase tracking-[0.2em] text-rose-700">
-                {t('roadmap.claimedStamp')}
+                {locale === 'ar' ? t('roadmap.claimedStampAr') : t('roadmap.claimedStamp')}
               </p>
-              <p className="text-center text-[10px] font-bold text-rose-600/90">{t('roadmap.claimedStampAr')}</p>
             </div>
           </motion.div>
         ) : null}
@@ -1042,22 +1046,36 @@ export function StreakCelebrationDialog({
     return () => window.clearTimeout(id)
   }, [open, reduceMotion])
 
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onOpenChange(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onOpenChange])
+
   return (
     <>
       <SuccessBurst active={burst && !reduceMotion} />
       <AnimatePresence>
         {open ? (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('celebration.badge')}
             className="fixed inset-0 z-60 flex items-center justify-center bg-[color-mix(in_oklab,var(--brand-primary)_25%,#0a0612_75%)] p-6 backdrop-blur-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            onClick={() => onOpenChange(false)}
           >
             <motion.div
               initial={{ scale: 0.85, opacity: 0, y: 16 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.92, opacity: 0, y: 10 }}
               transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+              onClick={(e) => e.stopPropagation()}
               className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-[color-mix(in_oklab,var(--brand-primary)_35%,white)] p-8 text-center shadow-[0_0_140px_-20px_var(--brand-glow)]"
               style={{
                 background:

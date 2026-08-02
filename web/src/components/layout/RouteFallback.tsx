@@ -6,7 +6,11 @@ export function RouteFallback() {
   const { t } = useI18n()
 
   return (
-    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-6 px-4 py-16">
+    <div
+      className="flex min-h-[40vh] flex-col items-center justify-center gap-6 px-4 py-16"
+      role="status"
+      aria-live="polite"
+    >
       <motion.div
         className="relative size-16 rounded-2xl border border-white/10 bg-zinc-950/80 shadow-[0_0_60px_-12px_var(--brand-glow,theme(colors.violet.500/0.45))]"
         animate={{ rotate: [0, 2, -2, 0], scale: [1, 1.03, 1] }}

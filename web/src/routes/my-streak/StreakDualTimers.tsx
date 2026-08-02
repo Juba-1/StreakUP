@@ -122,20 +122,10 @@ function TimerRing({
           </svg>
           <div className="text-center">
             {openNow ? (
-              <span className="text-[9px] font-bold uppercase tracking-[0.28em] text-emerald-200">
+              <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-200">
                 {openNowLabel}
               </span>
-            ) : (
-              <span
-                className={cn(
-                  'font-mono text-[11px] font-semibold tabular-nums leading-none',
-                  portalTextPrimary,
-                )}
-                dir="ltr"
-              >
-                {value}
-              </span>
-            )}
+            ) : null}
           </div>
         </div>
 

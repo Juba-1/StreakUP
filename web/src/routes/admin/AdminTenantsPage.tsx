@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus } from 'lucide-react'
+import { Flame, Moon, Plus, Snowflake, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -55,17 +55,17 @@ function pulseBadgeClass(pulse: TenantPulse) {
 
 function TenantPulseBadge({ pulse }: { pulse: TenantPulse }) {
   const { t } = useI18n()
-  const emoji =
-    pulse === 'hot' ? '🔥' : pulse === 'warm' ? '✨' : pulse === 'cool' ? '💤' : '🧊'
+  const Icon =
+    pulse === 'hot' ? Flame : pulse === 'warm' ? Sparkles : pulse === 'cool' ? Moon : Snowflake
 
   return (
     <motion.span
       layout
       initial={{ scale: 0.92, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold', pulseBadgeClass(pulse))}
+      className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold', pulseBadgeClass(pulse))}
     >
-      <span aria-hidden>{emoji}</span>
+      <Icon className="size-3" aria-hidden />
       {t(`admin.tenants.pulse.${pulse}`)}
     </motion.span>
   )

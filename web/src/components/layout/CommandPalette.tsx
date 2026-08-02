@@ -99,19 +99,49 @@ export function CommandPalette() {
             <Command.Group heading={t('tier.hq.title')} className="px-2 py-1 text-[11px] text-white/40">
               <Command.Item
                 className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
-                onSelect={() => go(`/hq/${hqSlug}/brand`)}
+                onSelect={() => go(`/hq/${hqSlug}`)}
+              >
+                {t('hq.nav.overview')}
+              </Command.Item>
+              <Command.Item
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
+                onSelect={() => go(`/hq/${hqSlug}/operations`)}
+              >
+                {t('hq.nav.operations')}
+              </Command.Item>
+              <Command.Item
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
+                onSelect={() => go(`/hq/${hqSlug}/customers`)}
+              >
+                {t('hq.nav.customers')}
+              </Command.Item>
+              <Command.Item
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
+                onSelect={() => go(`/hq/${hqSlug}/rewards`)}
+              >
+                {t('hq.nav.rewards')}
+              </Command.Item>
+              <Command.Item
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
+                onSelect={() => go(`/hq/${hqSlug}/analytics`)}
+              >
+                {t('hq.nav.analytics')}
+              </Command.Item>
+              <Command.Item
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
+                onSelect={() => go(`/hq/${hqSlug}/settings?tab=brand`)}
               >
                 {t('hq.nav.brand')}
               </Command.Item>
               <Command.Item
                 className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
-                onSelect={() => go(`/hq/${hqSlug}/api`)}
+                onSelect={() => go(`/hq/${hqSlug}/settings?tab=integrations`)}
               >
                 {t('hq.nav.integrations')}
               </Command.Item>
               <Command.Item
                 className="cursor-pointer rounded-lg px-3 py-2 text-sm text-white/90 aria-selected:bg-white/10"
-                onSelect={() => go(`/hq/${hqSlug}/billing`)}
+                onSelect={() => go(`/hq/${hqSlug}/settings?tab=billing`)}
               >
                 {t('hq.nav.billing')}
               </Command.Item>

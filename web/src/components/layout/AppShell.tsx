@@ -84,6 +84,7 @@ export function AppShell() {
             <div className="flex items-center gap-1 pe-2">
               <button
                 type="button"
+                aria-pressed={locale === 'en'}
                 className={cn(
                   buttonVariants({ variant: locale === 'en' ? 'default' : 'ghost', size: 'sm' }),
                   'h-7 px-2 text-[11px]',
@@ -94,6 +95,7 @@ export function AppShell() {
               </button>
               <button
                 type="button"
+                aria-pressed={locale === 'ar'}
                 className={cn(
                   buttonVariants({ variant: locale === 'ar' ? 'default' : 'ghost', size: 'sm' }),
                   'h-7 px-2 text-[11px]',
@@ -103,11 +105,6 @@ export function AppShell() {
                 {t('shell.locale.ar')}
               </button>
             </div>
-            {!streakMatch ? (
-              <span className="text-muted-foreground hidden max-w-[10rem] truncate text-[10px] font-mono sm:inline">
-                {location.pathname}
-              </span>
-            ) : null}
             {session ? (
               <button
                 type="button"

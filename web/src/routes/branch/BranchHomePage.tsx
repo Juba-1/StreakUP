@@ -9,7 +9,7 @@ import {
   Users,
   Wrench,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,17 +29,15 @@ type CustomerRow = BranchGuestRow & {
   last_visit: string | null
 }
 
-const WEEK_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-
 export function BranchHomePage() {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const { data: profile } = useProfile()
   const [search, setSearch] = useState('')
   const [toolsGuest, setToolsGuest] = useState<BranchGuestRow | null>(null)
 
   const stats = useQuery({
-    queryKey: ['branch-manager-stats'],
-    enabled: Boolean(supabaseBrowserClient && profile?.role === 'branch_manager'),
+    queryKey: ['branch-manager-stats', profile?.branch_id, profile?.cafe_id],
+    enabled: Boolean(supabaseBrowserClient && profile?.role === 'branch_manager' && profile.branch_id),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc('branch_manager_branch_stats_secure')
       if (error) throw error
@@ -56,8 +54,8 @@ export function BranchHomePage() {
   })
 
   const customers = useQuery({
-    queryKey: ['branch-manager-customers', search],
-    enabled: Boolean(supabaseBrowserClient && profile?.role === 'branch_manager'),
+    queryKey: ['branch-manager-customers', profile?.branch_id, profile?.cafe_id, search],
+    enabled: Boolean(supabaseBrowserClient && profile?.role === 'branch_manager' && profile.branch_id),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc(
         'branch_manager_list_customers_secure',
@@ -69,22 +67,6 @@ export function BranchHomePage() {
       return { rows: (res.rows ?? []) as CustomerRow[], total: res.total ?? 0 }
     },
   })
-
-  const weekStrip = useMemo(() => {
-    const loc = locale === 'ar' ? 'ar-SA' : 'en-US'
-    const anchor = new Date()
-    const day = anchor.getDay()
-    const diffToMonday = (day + 6) % 7
-    const monday = new Date(anchor)
-    monday.setDate(anchor.getDate() - diffToMonday)
-    return WEEK_KEYS.map((key, i) => {
-      const d = new Date(monday)
-      d.setDate(monday.getDate() + i)
-      const label = d.toLocaleDateString(loc, { weekday: 'short' })
-      const isToday = d.toDateString() === anchor.toDateString()
-      return { key, label, isToday }
-    })
-  }, [locale])
 
   const statCards = [
     {
@@ -159,26 +141,7 @@ export function BranchHomePage() {
           <CardContent className="space-y-4">
             <p className="text-muted-foreground text-[11px]">{t('branch.schedule.tz')}</p>
             <p className="font-mono text-xs text-white/80">{stats.data?.cafe_timezone ?? '—'}</p>
-            <div className="grid grid-cols-7 gap-1.5">
-              {weekStrip.map((d) => (
-                <motion.div
-                  key={d.key}
-                  whileHover={{ y: -2 }}
-                  className={cn(
-                    'flex flex-col items-center gap-1 rounded-xl border px-0.5 py-2 text-center',
-                    d.isToday
-                      ? 'border-sky-400/40 bg-sky-500/15 shadow-[0_0_24px_-8px_rgba(56,189,248,0.45)]'
-                      : 'border-white/10 bg-black/30',
-                  )}
-                >
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-white/45">
-                    {d.label}
-                  </span>
-                  <span className="text-[10px] font-medium text-white/85">{t('branch.schedule.slot')}</span>
-                </motion.div>
-              ))}
-            </div>
-            <p className="text-muted-foreground border-t border-white/10 pt-3 text-[10px] leading-relaxed">
+            <p className="text-muted-foreground border-t border-white/10 pt-3 text-[11px] leading-relaxed">
               {t('branch.schedule.footnote')}
             </p>
           </CardContent>
@@ -212,6 +175,19 @@ export function BranchHomePage() {
                 <Skeleton className="h-14 w-full" />
                 <Skeleton className="h-14 w-full" />
               </div>
+            ) : customers.isError ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-center" role="alert">
+                <p className="text-sm text-white/60">{t('branch.customers.loadError')}</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="border-white/10"
+                  onClick={() => void customers.refetch()}
+                >
+                  {t('common.retry')}
+                </Button>
+              </div>
             ) : (customers.data?.rows.length ?? 0) === 0 ? (
               <p className="py-12 text-center text-sm text-white/55">{t('branch.customers.empty')}</p>
             ) : (
@@ -221,7 +197,6 @@ export function BranchHomePage() {
                     <motion.li
                       key={c.id}
                       layout
-                      whileHover={{ scale: 1.01 }}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-3 transition hover:border-white/18"
                     >
                       <div className="min-w-0">

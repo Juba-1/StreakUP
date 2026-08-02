@@ -1,353 +1,252 @@
-import { useQuery } from '@tanstack/react-query'
-import { motion, useReducedMotion } from 'framer-motion'
-import {
-  Award,
-  Coffee,
-  Flame,
-  Gift,
-  Shield,
-  Skull,
-  Sparkles,
-  Users,
-} from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+import { useCallback, useMemo, useState } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
-import { TenantAICopilot } from '@/components/hq/TenantAICopilot'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/core/i18n/I18nProvider'
-import { MILESTONE_ICON_META, normalizeIconType } from '@/lib/milestone-icons'
-import { supabaseBrowserClient } from '@/lib/supabase/browser-client'
-import { cn } from '@/lib/utils'
+import { useProfile } from '@/hooks/useProfile'
+import { ActionableInsights } from '@/routes/hq/reports/ActionableInsights'
+import { BranchPerformance } from '@/routes/hq/reports/BranchPerformance'
+import { DateRangeFilter } from '@/routes/hq/reports/DateRangeFilter'
+import { DeepAnalysis } from '@/routes/hq/reports/DeepAnalysis'
+import { ExecutiveSummary } from '@/routes/hq/reports/ExecutiveSummary'
+import { PerformanceTrend } from '@/routes/hq/reports/PerformanceTrend'
+import { QuickInsightsBar } from '@/routes/hq/reports/QuickInsightsBar'
+import { ReportsDrawer } from '@/routes/hq/reports/ReportsDrawer'
+import { RewardsOverview } from '@/routes/hq/reports/RewardsOverview'
+import { VisitHeatmap } from '@/routes/hq/reports/VisitHeatmap'
+import { useHqReportsDashboard } from '@/routes/hq/reports/useHqReportsDashboard'
+import type {
+  ActiveTab,
+  BranchTotal,
+  DatePreset,
+  DrawerKind,
+  InsightAction,
+  ReportsInsight,
+} from '@/routes/hq/reports/types'
 
-type BreakdownRow = { label: string; icon_type: string; count: number }
-
-type OwnerPayload = {
-  ok: boolean
-  window_days?: number
-  timezone?: string
-  owner?: {
-    active_streaks_now: number
-    shield_saves: number
-    streak_champions: number
-    broken_streaks_this_week: number
-    rewards_claimed_total: number
-    rewards_ready_to_claim: number
-  }
-  claimed_breakdown?: BreakdownRow[]
-  ready_breakdown?: BreakdownRow[]
-  totals?: { customers: number; check_ins_window: number }
-  reason?: string
-}
-
-const PIE_COLORS = ['#8b5cf6', '#22d3ee', '#f59e0b', '#f472b6', '#34d399', '#a78bfa', '#fb923c']
-
-function parseOwner(data: unknown): OwnerPayload {
-  if (!data || typeof data !== 'object') return { ok: false }
-  return data as OwnerPayload
-}
-
-function OwnerMetricCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  accent,
-  delay,
-}: {
-  icon: typeof Users
-  label: string
-  value: string
-  hint: string
-  accent: string
-  delay: number
-}) {
-  const reduceMotion = useReducedMotion()
-  return (
-    <motion.div
-      initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 280, damping: 26, delay }}
-      className="relative overflow-hidden rounded-2xl border border-white/12 bg-zinc-950/70 p-5 backdrop-blur-xl"
-    >
-      <div
-        className="pointer-events-none absolute inset-0 opacity-90"
-        style={{ background: accent }}
-        aria-hidden
-      />
-      <div className="relative flex items-start gap-4">
-        <div className="grid size-12 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/40">
-          <Icon className="size-6 text-white/85" aria-hidden />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/50">{label}</p>
-          <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-white">{value}</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-white/45">{hint}</p>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
-
-function BreakdownList({
-  rows,
-  emptyLabel,
-}: {
-  rows: BreakdownRow[]
-  emptyLabel: string
-}) {
-  if (rows.length === 0) {
-    return <p className="py-8 text-center text-sm text-white/40">{emptyLabel}</p>
-  }
-  return (
-    <ul className="space-y-2">
-      {rows.map((row) => {
-        const icon = normalizeIconType(row.icon_type)
-        const meta = MILESTONE_ICON_META[icon]
-        const Icon = meta.Icon
-        return (
-          <li
-            key={`${row.label}-${row.icon_type}`}
-            className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-black/35 px-3 py-2.5"
-          >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/5">
-                <Icon className="size-4 text-(--brand-secondary)" aria-hidden />
-              </span>
-              <span className="truncate text-sm font-medium text-white">{row.label}</span>
-            </div>
-            <span className="shrink-0 text-lg font-bold tabular-nums text-white">
-              {row.count}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
-  )
+function scrollToId(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 export function HqAnalyticsPage() {
+  const { slug } = useParams()
+  const navigate = useNavigate()
   const { t } = useI18n()
-  const [days, setDays] = useState(7)
+  const { data: profile, isLoading: pLoading } = useProfile()
+  const cafeId = profile?.cafe_id
+  const enabled = profile?.role === 'hq_owner' && Boolean(cafeId)
 
-  const q = useQuery({
-    queryKey: ['hq-owner-analytics', days],
-    enabled: Boolean(supabaseBrowserClient),
-    queryFn: async () => {
-      const { data, error } = await supabaseBrowserClient!.rpc('hq_roi_analytics_secure', {
-        p_days: days,
-      })
-      if (error) throw error
-      return parseOwner(data)
+  const [preset, setPreset] = useState<DatePreset>('30d')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('visits')
+  const [drawer, setDrawer] = useState<DrawerKind>(null)
+  const [branch, setBranch] = useState<BranchTotal | null>(null)
+
+  const dash = useHqReportsDashboard(cafeId, enabled, preset, activeTab)
+
+  const openDrawer = useCallback((kind: DrawerKind, b: BranchTotal | null = null) => {
+    setBranch(b)
+    setDrawer(kind)
+  }, [])
+
+  const runAction = useCallback(
+    (action: InsightAction, insight?: ReportsInsight) => {
+      if (action.type === 'drawer') {
+        openDrawer(action.kind)
+        return
+      }
+      if (action.type === 'tab') {
+        setActiveTab(action.tab)
+        scrollToId('reports-trend')
+        return
+      }
+      if (action.type === 'scroll') {
+        if (insight?.branchId) {
+          const b = dash.rankedBranches.find((x) => x.branch_id === insight.branchId)
+          if (b) openDrawer('branch', b)
+        }
+        scrollToId(action.id)
+        return
+      }
+      if (action.type === 'route' && slug) {
+        void navigate(`/hq/${slug}/${action.path}`)
+      }
     },
-    staleTime: 60_000,
-  })
-
-  const o = q.data?.owner
-  const claimed = q.data?.claimed_breakdown ?? []
-  const ready = q.data?.ready_breakdown ?? []
-
-  const pieData = useMemo(
-    () =>
-      claimed.map((row, i) => ({
-        name: row.label,
-        value: row.count,
-        fill: PIE_COLORS[i % PIE_COLORS.length],
-      })),
-    [claimed],
+    [dash.rankedBranches, navigate, openDrawer, slug],
   )
 
-  return (
-    <div className="space-y-8 pb-10">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-wrap items-end justify-between gap-4"
-      >
-        <div className="space-y-2">
-          <Badge variant="secondary" className="border-white/10 bg-black/40">
-            {t('hq.owner.badge')}
-          </Badge>
-          <h2 className="text-3xl font-semibold tracking-tight text-white">{t('hq.owner.title')}</h2>
-          <p className="max-w-2xl text-sm leading-relaxed text-white/55">{t('hq.owner.subtitle')}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {[7, 30].map((d) => (
-            <Button
-              key={d}
-              size="sm"
-              variant={days === d ? 'default' : 'secondary'}
-              className={cn(
-                days === d &&
-                  'bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-secondary))] text-black',
-              )}
-              onClick={() => setDays(d)}
-            >
-              {t('hq.roi.windowDays').replace('{n}', String(d))}
-            </Button>
+  const periodLabel = useMemo(() => {
+    if (dash.days == null) return t('hq.reports.date.custom')
+    return t('hq.reports.periodDays').replace('{n}', String(dash.days))
+  }, [dash.days, t])
+
+  if (pLoading) {
+    return (
+      <div className="space-y-5">
+        <Skeleton className="h-10 w-full max-w-md rounded-xl bg-white/10 ms-auto" />
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 rounded-2xl bg-white/10" />
           ))}
-          <Button size="sm" variant="outline" disabled={q.isFetching} onClick={() => void q.refetch()}>
-            {q.isFetching ? t('common.loading') : t('hq.analytics.load')}
+        </div>
+        <Skeleton className="h-[320px] w-full rounded-2xl bg-white/10" />
+      </div>
+    )
+  }
+
+  if (!profile || profile.role !== 'hq_owner' || !cafeId || !slug) {
+    return <Navigate to="/login" replace />
+  }
+
+  const kpisLoading = dash.ownerQuery.isLoading && dash.seriesQuery.isLoading
+  const chartLoading = dash.seriesQuery.isLoading && !dash.series
+  const pulseLoading = dash.visitPulseQuery.isLoading
+  const ownerError = dash.ownerQuery.isError
+  const seriesError = dash.seriesQuery.isError
+
+  return (
+    <div className="space-y-6 pb-10">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            {t('hq.reports.title')}
+          </h1>
+          <p className="mt-1 text-sm text-white/45">{t('hq.reports.subtitle')}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DateRangeFilter value={preset} onChange={setPreset} />
+        </div>
+      </header>
+
+      {ownerError || seriesError ? (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
+          {t('hq.owner.migrationHint')}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="ms-3"
+            onClick={() => void dash.refetch()}
+          >
+            {t('hq.reports.retry')}
           </Button>
         </div>
-      </motion.div>
-
-      {q.isError ? (
-        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
-          {t('hq.owner.migrationHint')}
-        </p>
       ) : null}
 
-      {q.isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 bg-white/5" />
-          ))}
-        </div>
-      ) : q.data?.ok && o ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <OwnerMetricCard
-            icon={Flame}
-            label={t('hq.owner.metricActive')}
-            value={String(o.active_streaks_now)}
-            hint={t('hq.owner.metricActiveHint')}
-            accent="radial-gradient(80% 60% at 0% 0%, color-mix(in oklab, #f97316 22%, transparent), transparent 60%)"
-            delay={0.04}
-          />
-          <OwnerMetricCard
-            icon={Shield}
-            label={t('hq.owner.metricShield')}
-            value={String(o.shield_saves)}
-            hint={t('hq.owner.metricShieldHint').replace('{n}', String(days))}
-            accent="radial-gradient(80% 60% at 100% 0%, color-mix(in oklab, #38bdf8 20%, transparent), transparent 60%)"
-            delay={0.08}
-          />
-          <OwnerMetricCard
-            icon={Award}
-            label={t('hq.owner.metricChampions')}
-            value={String(o.streak_champions)}
-            hint={t('hq.owner.metricChampionsHint')}
-            accent="radial-gradient(80% 60% at 50% 0%, color-mix(in oklab, var(--brand-primary) 18%, transparent), transparent 60%)"
-            delay={0.12}
-          />
-          <OwnerMetricCard
-            icon={Skull}
-            label={t('hq.owner.metricLost')}
-            value={String(o.broken_streaks_this_week)}
-            hint={t('hq.owner.metricLostHint')}
-            accent="radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, #f43f5e 16%, transparent), transparent 60%)"
-            delay={0.16}
-          />
-          <OwnerMetricCard
-            icon={Gift}
-            label={t('hq.owner.metricClaimed')}
-            value={String(o.rewards_claimed_total)}
-            hint={t('hq.owner.metricClaimedHint')
-              .replace('{ready}', String(o.rewards_ready_to_claim))
-              .replace('{n}', String(days))}
-            accent="radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--brand-secondary) 18%, transparent), transparent 60%)"
-            delay={0.2}
+      <ExecutiveSummary
+        loading={kpisLoading}
+        retentionPct={dash.retPct}
+        returning={dash.retention?.active_customers_window ?? null}
+        rewards={dash.owner?.rewards_claimed_total ?? null}
+        activeStreaks={dash.owner?.active_streaks_now ?? null}
+        shieldSaves={dash.owner?.shield_saves ?? null}
+        sparkVisits={dash.sparkVisits}
+        momentum={dash.momentum}
+        showRoi={dash.canAdvanced}
+        activeTab={activeTab}
+        onFocusTab={setActiveTab}
+        onOpen={(id) => {
+          if (id === 'roi') openDrawer('roi')
+          else if (id === 'returning') openDrawer('returning')
+          else if (id === 'rewards') openDrawer('rewards')
+          else if (id === 'streaks' || id === 'shields') openDrawer('retention')
+          else openDrawer('retention')
+        }}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-12 lg:items-stretch">
+        <div className="lg:col-span-8">
+          <PerformanceTrend
+            loading={chartLoading}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            visitData={dash.chartVisits}
+            rewardData={dash.chartRewards}
+            retentionPct={dash.retPct}
+            showRoi={dash.canAdvanced}
+            onPointClick={() => {
+              if (activeTab === 'roi') openDrawer('roi')
+              else if (activeTab === 'rewards') openDrawer('rewards')
+              else if (activeTab === 'retention') openDrawer('retention')
+              else openDrawer('visits')
+            }}
           />
         </div>
-      ) : null}
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <motion.section
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-[1.75rem] border border-white/10 bg-zinc-950/60 p-6 backdrop-blur-xl"
-        >
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Coffee className="size-5 text-(--brand-primary)" aria-hidden />
-                <h3 className="text-lg font-semibold text-white">{t('hq.owner.costTitle')}</h3>
-              </div>
-              <p className="mt-1 max-w-lg text-sm text-white/50">{t('hq.owner.costSubtitle')}</p>
-            </div>
-            {o ? (
-              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200/70">
-                  {t('hq.owner.pendingLabel')}
-                </p>
-                <p className="text-2xl font-bold tabular-nums text-amber-100">
-                  {o.rewards_ready_to_claim}
-                </p>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,280px)_1fr]">
-            <div className="mx-auto w-full max-w-[280px]">
-              {pieData.length > 0 ? (
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={62}
-                        outerRadius={100}
-                        paddingAngle={3}
-                        stroke="rgba(0,0,0,0.35)"
-                      >
-                        {pieData.map((entry, i) => (
-                          <Cell key={i} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          background: '#0a0a0a',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: 12,
-                          fontSize: 12,
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="flex h-[280px] items-center justify-center text-sm text-white/40">
-                  {t('hq.owner.costEmpty')}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.35em] text-white/40">
-                  {t('hq.owner.claimedListTitle')}
-                </p>
-                <BreakdownList rows={claimed} emptyLabel={t('hq.owner.costEmpty')} />
-              </div>
-              {ready.length > 0 ? (
-                <div>
-                  <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.35em] text-amber-300/60">
-                    {t('hq.owner.readyListTitle')}
-                  </p>
-                  <BreakdownList rows={ready} emptyLabel="" />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </motion.section>
-
-        <TenantAICopilot />
+        <div className="lg:col-span-4">
+          <RewardsOverview
+            loading={kpisLoading}
+            claimed={dash.claimed}
+            claimedTotal={dash.owner?.rewards_claimed_total ?? 0}
+            readyTotal={dash.owner?.rewards_ready_to_claim ?? 0}
+            redemptionRate={dash.redemptionRate}
+            onOpen={() => openDrawer('rewards')}
+          />
+        </div>
       </div>
 
-      {q.data?.ok ? (
-        <p className="flex items-center gap-2 text-[11px] text-white/35">
-          <Sparkles className="size-3.5" aria-hidden />
-          {t('hq.owner.footer')
-            .replace('{customers}', String(q.data.totals?.customers ?? 0))
-            .replace('{checkins}', String(q.data.totals?.check_ins_window ?? 0))}
-        </p>
+      <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
+        <div className="lg:col-span-4">
+          <VisitHeatmap loading={pulseLoading} cells={dash.heatmap} />
+        </div>
+        <div className="lg:col-span-8">
+          {dash.canBranches ? (
+            <BranchPerformance
+              loading={chartLoading}
+              visible
+              branches={dash.rankedBranches}
+              onOpen={(b) => openDrawer('branch', b)}
+            />
+          ) : (
+            <ActionableInsights
+              loading={kpisLoading && !dash.owner}
+              insights={dash.insightsForTab}
+              onAction={(action, insight) => runAction(action, insight)}
+            />
+          )}
+        </div>
+      </div>
+
+      {dash.canBranches ? (
+        <ActionableInsights
+          loading={kpisLoading && !dash.owner}
+          insights={dash.insightsForTab}
+          onAction={(action, insight) => runAction(action, insight)}
+        />
       ) : null}
+
+      <QuickInsightsBar facts={dash.quickFacts} periodLabel={periodLabel} />
+
+      <DeepAnalysis
+        activeTab={activeTab}
+        owner={dash.owner}
+        claimed={dash.claimed}
+        ready={dash.ready}
+        retPct={dash.retPct}
+        activeWindow={dash.retention?.active_customers_window ?? 0}
+        totalCustomers={dash.retention?.total_customers ?? dash.totals?.customers ?? 0}
+        checkIns={dash.totals?.check_ins_window ?? 0}
+        shieldSaves={dash.owner?.shield_saves ?? 0}
+        showRoi={dash.canAdvanced}
+      />
+
+      <ReportsDrawer
+        kind={drawer}
+        onClose={() => {
+          setDrawer(null)
+          setBranch(null)
+        }}
+        owner={dash.owner}
+        retPct={dash.retPct}
+        returning={dash.retention?.active_customers_window ?? 0}
+        totalCustomers={dash.retention?.total_customers ?? dash.totals?.customers ?? 0}
+        checkIns={dash.totals?.check_ins_window ?? 0}
+        claimed={dash.claimed}
+        ready={dash.ready}
+        sparkVisits={dash.sparkVisits}
+        rankedBranches={dash.rankedBranches}
+        branch={branch}
+        momentum={dash.momentum}
+      />
     </div>
   )
 }

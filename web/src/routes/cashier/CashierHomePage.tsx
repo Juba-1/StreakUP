@@ -77,11 +77,17 @@ type FoundCustomer = {
 
 type CashierHomePageProps = {
   deviceSession: CashierDeviceSession
+  cafeSlug: string
   branchCode: string
 }
 
-export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: CashierHomePageProps) {
-  const { branchCode: branchCodeParam } = useParams()
+export function CashierHomePage({
+  deviceSession,
+  cafeSlug: cafeSlugProp,
+  branchCode: branchCodeProp,
+}: CashierHomePageProps) {
+  const { cafeSlug: cafeSlugParam, branchCode: branchCodeParam } = useParams()
+  const cafeSlug = (cafeSlugProp ?? cafeSlugParam ?? '').toLowerCase()
   const branchCode = (branchCodeProp ?? branchCodeParam ?? '').toLowerCase()
   const qc = useQueryClient()
   const { t } = useI18n()
@@ -91,7 +97,7 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
   const [pin, setPin] = useState('')
   const [verified, setVerified] = useState<FoundCustomer | null>(null)
   const [alreadyToday, setAlreadyToday] = useState<FoundCustomer | null>(null)
-  const [offlinePending, setOfflinePending] = useState(() => listQueuedVisits().length)
+  const [offlinePending, setOfflinePending] = useState(0)
   const [visitBurst, setVisitBurst] = useState(false)
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -100,14 +106,15 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
   const clearVisitPanelTimerRef = useRef<number | null>(null)
 
   const refreshQueueCount = useCallback(() => {
-    setOfflinePending(listQueuedVisits().length)
-  }, [])
+    setOfflinePending(listQueuedVisits(deviceSession.branchId).length)
+  }, [deviceSession.branchId])
 
   const branchQuery = useQuery({
-    queryKey: ['cashier-branch-device', branchCode, deviceSession.branchId],
-    enabled: Boolean(supabaseBrowserClient && branchCode && deviceSession.token),
+    queryKey: ['cashier-branch-device', cafeSlug, branchCode, deviceSession.branchId],
+    enabled: Boolean(supabaseBrowserClient && cafeSlug && branchCode && deviceSession.token),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc('cashier_branch_public_lookup', {
+        p_cafe_slug: cafeSlug,
         p_branch_code: branchCode,
       })
       if (error) throw error
@@ -117,14 +124,18 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
         branch_name?: string
         branch_code?: string
         cafe_id?: string
+        cafe_slug?: string
       }
       if (!res?.ok || !res.branch_id) return null
       if (res.branch_id !== deviceSession.branchId) return null
+      if (res.cafe_slug && res.cafe_slug.toLowerCase() !== cafeSlug) return null
+      if (deviceSession.cafeSlug && deviceSession.cafeSlug.toLowerCase() !== cafeSlug) return null
       return {
         id: res.branch_id,
         name: res.branch_name ?? deviceSession.branchName ?? branchCode,
         branch_code: res.branch_code ?? branchCode,
         cafe_id: res.cafe_id ?? deviceSession.cafeId,
+        cafe_slug: res.cafe_slug ?? cafeSlug,
       }
     },
   })
@@ -134,7 +145,14 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
     name: deviceSession.branchName ?? branchCode,
     branch_code: deviceSession.branchCode,
     cafe_id: deviceSession.cafeId,
+    cafe_slug: deviceSession.cafeSlug ?? cafeSlug,
   }
+
+  // Fail closed: URL café must match device session café (prevents cross-tenant reuse).
+  const sessionCafeOk =
+    Boolean(deviceSession.cafeSlug) &&
+    deviceSession.cafeSlug.toLowerCase() === cafeSlug &&
+    (!deviceSession.branchCode || deviceSession.branchCode.toLowerCase() === branchCode)
 
   // Access matrix — see server-side mirror in supabase/phase18.sql.
   const accessLevel = useMemo<'cashier' | 'manager' | 'hq' | 'super' | 'denied'>(() => {
@@ -159,24 +177,27 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
   const isPrivilegedPreview = accessLevel === 'hq' || accessLevel === 'super'
 
   const flushOfflineQueue = useCallback(async () => {
-    if (!navigator.onLine || !deviceSession.token) return
-    const before = listQueuedVisits().length
-    const items = listQueuedVisits()
+    if (!navigator.onLine || !deviceSession.token) {
+      refreshQueueCount()
+      return
+    }
+    const items = listQueuedVisits(deviceSession.branchId)
+    const before = items.length
     for (const q of items) {
       try {
         await recordVisitByDevice(deviceSession.token, q.input)
-        removeQueuedVisit(q.id)
+        removeQueuedVisit(deviceSession.branchId, q.id)
       } catch {
         break
       }
     }
     refreshQueueCount()
     await qc.invalidateQueries({ queryKey: ['cashier-branch'] })
-    const after = listQueuedVisits().length
+    const after = listQueuedVisits(deviceSession.branchId).length
     if (before > after) {
       toast.success(t('cashier.toast.syncedBatch').replace('{n}', String(before - after)))
     }
-  }, [deviceSession.token, qc, refreshQueueCount, t])
+  }, [deviceSession.token, deviceSession.branchId, qc, refreshQueueCount, t])
 
   useEffect(() => {
     function onOnline() {
@@ -280,6 +301,11 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
         toast.error(t('cashier.branchMissing'))
         return
       }
+      // Transport failures are not "wrong PIN" — don't burn lockout attempts.
+      if (!navigator.onLine || /failed to fetch|fetch failed|networkerror|load failed/i.test(e.message ?? '')) {
+        toast.error(t('cashier.toast.network'))
+        return
+      }
       const cafeId = profile?.cafe_id ?? branch?.cafe_id ?? 'unknown'
       const subject = `${cafeId}:pin:${pin.trim()}`
       const { lockedMs } = registerFailure(CASHIER_PIN_WINDOW, subject)
@@ -322,9 +348,17 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
           streakAfter: res.streak_after,
           status: res.status,
         }
-      } catch {
-        enqueueOfflineVisit(input)
-        return { mode: 'queued' as const, alreadyVisitedToday: false, streakAfter: undefined }
+      } catch (e) {
+        // Only transport failures belong in the offline queue — server rejections
+        // (e.g. revoked device token) would sit at the queue head and block sync.
+        const msg = e instanceof Error ? e.message : ''
+        const transport =
+          !navigator.onLine || /failed to fetch|fetch failed|networkerror|load failed/i.test(msg)
+        if (transport) {
+          enqueueOfflineVisit(input)
+          return { mode: 'queued' as const, alreadyVisitedToday: false, streakAfter: undefined }
+        }
+        throw e
       }
     },
     onSuccess: async (result) => {
@@ -341,7 +375,7 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
 
       if (result.alreadyVisitedToday) {
         hapticError()
-        toast.warning('تم تسجيل زيارة هذا العميل اليوم مسبقاً')
+        toast.warning(t('cashier.alreadyToday.toast'))
         setAlreadyToday(verified)
         setVerified(null)
         setPin('')
@@ -372,8 +406,12 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
         setPin('')
       }, 900)
     },
-    onError: () => {
+    onError: (e: Error) => {
       hapticError()
+      if (e.message === 'forbidden') {
+        toast.error(t('cashier.toast.forbidden'))
+        return
+      }
       toast.error(t('cashier.toast.visitFailed'))
     },
   })
@@ -411,7 +449,7 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
         if (alreadyToday) {
           setAlreadyToday(null)
         } else if (verified) {
-          if (!visit.isPending) void visit.mutateAsync()
+          if (!visit.isPending) visit.mutate()
         } else if (pinReady && !findCustomer.isPending) {
           void findCustomer.mutateAsync()
         }
@@ -421,7 +459,13 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
     return () => window.removeEventListener('keydown', onKey)
   }, [alreadyToday, verified, findCustomer, handleKey, pinReady, visit])
 
-  if (branchQuery.isLoading) {
+  if (!sessionCafeOk) {
+    return <p className="text-muted-foreground text-sm">{t('cashier.branchMissing')}</p>
+  }
+
+  // Offline reload: the device session is the authority — render with the
+  // session fallback instead of stranding the kiosk on skeleton/error screens.
+  if (branchQuery.isLoading && isOnline) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-12 w-64" />
@@ -433,7 +477,7 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
     )
   }
 
-  if (branchQuery.isError || (branchQuery.isFetched && !branch?.id)) {
+  if (isOnline && (branchQuery.isError || (branchQuery.isFetched && !branch?.id))) {
     return <p className="text-muted-foreground text-sm">{t('cashier.branchMissing')}</p>
   }
 
@@ -596,7 +640,7 @@ export function CashierHomePage({ deviceSession, branchCode: branchCodeProp }: C
             branchId={branch!.id}
             pending={visit.isPending}
             t={t}
-            onConfirm={() => void visit.mutateAsync()}
+            onConfirm={() => visit.mutate()}
             onCancel={() => {
               setVerified(null)
               setPin('')
@@ -920,7 +964,7 @@ function ConfirmPanel({
             whileTap={{ scale: 0.98 }}
             disabled={pending}
             onClick={onConfirm}
-            className="relative h-24 overflow-hidden rounded-3xl bg-[linear-gradient(135deg,#10b981,#22d3ee)] text-2xl font-semibold text-black shadow-[0_40px_100px_-30px_rgba(16,185,129,0.7)] disabled:opacity-70"
+            className="relative h-24 overflow-hidden rounded-3xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-secondary))] text-2xl font-semibold text-black shadow-[0_40px_100px_-30px_var(--brand-glow)] disabled:opacity-70"
           >
             <span className="relative z-10 flex items-center justify-center gap-2.5">
               {pending ? (

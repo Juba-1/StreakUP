@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
@@ -82,6 +83,7 @@ export function AdminTenantDetailPage() {
   const [ownerPassword, setOwnerPassword] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [statusTarget, setStatusTarget] = useState<CafeStatus | null>(null)
 
   const cafeQuery = useQuery({
     queryKey: ['admin-tenant', tenantSlug],
@@ -431,9 +433,7 @@ export function AdminTenantDetailPage() {
               type="button"
               variant="secondary"
               disabled={setStatus.isPending || cafe.status === 'active'}
-              onClick={() => {
-                if (window.confirm(t('admin.tenant.confirmActivate'))) void setStatus.mutateAsync('active')
-              }}
+              onClick={() => setStatusTarget('active')}
             >
               {t('admin.tenant.activate')}
             </Button>
@@ -441,9 +441,7 @@ export function AdminTenantDetailPage() {
               type="button"
               variant="destructive"
               disabled={setStatus.isPending || cafe.status === 'suspended'}
-              onClick={() => {
-                if (window.confirm(t('admin.tenant.confirmSuspend'))) void setStatus.mutateAsync('suspended')
-              }}
+              onClick={() => setStatusTarget('suspended')}
             >
               {t('admin.tenant.suspend')}
             </Button>
@@ -452,14 +450,36 @@ export function AdminTenantDetailPage() {
               variant="outline"
               className="border-white/15 text-white/80"
               disabled={setStatus.isPending || cafe.status === 'archived'}
-              onClick={() => {
-                if (window.confirm(t('admin.tenant.confirmArchive'))) void setStatus.mutateAsync('archived')
-              }}
+              onClick={() => setStatusTarget('archived')}
             >
               {t('admin.tenant.archive')}
             </Button>
           </CardContent>
         </Card>
+
+        <ConfirmDialog
+          open={statusTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setStatusTarget(null)
+          }}
+          tone={statusTarget === 'active' ? 'default' : 'danger'}
+          title={t('common.confirmTitle')}
+          description={
+            statusTarget === 'active'
+              ? t('admin.tenant.confirmActivate')
+              : statusTarget === 'suspended'
+                ? t('admin.tenant.confirmSuspend')
+                : statusTarget === 'archived'
+                  ? t('admin.tenant.confirmArchive')
+                  : undefined
+          }
+          pending={setStatus.isPending}
+          onConfirm={async () => {
+            if (!statusTarget) return
+            await setStatus.mutateAsync(statusTarget)
+            setStatusTarget(null)
+          }}
+        />
 
         <Card className="relative overflow-hidden border-white/10 bg-zinc-950/70 backdrop-blur-md">
           <div

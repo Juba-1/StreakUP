@@ -34,6 +34,9 @@ const HqShell = lazy(() => import('@/routes/hq/HqShell').then((m) => ({ default:
 const HqHomePage = lazy(() =>
   import('@/routes/hq/HqHomePage').then((m) => ({ default: m.HqHomePage })),
 )
+const HqOperationsPage = lazy(() =>
+  import('@/routes/hq/HqOperationsPage').then((m) => ({ default: m.HqOperationsPage })),
+)
 const HqDevelopersPage = lazy(() =>
   import('@/routes/hq/HqDevelopersPage').then((m) => ({ default: m.HqDevelopersPage })),
 )
@@ -211,6 +214,14 @@ export const appRouter = createBrowserRouter([
                 ),
               },
               {
+                path: 'operations',
+                element: (
+                  <SuspenseWrap>
+                    <HqOperationsPage />
+                  </SuspenseWrap>
+                ),
+              },
+              {
                 path: 'api',
                 element: (
                   <SuspenseWrap>
@@ -307,7 +318,7 @@ export const appRouter = createBrowserRouter([
           },
 
           {
-            path: '/cashier/:branchCode',
+            path: '/cashier/:cafeSlug/:branchCode',
             element: (
               <SuspenseWrap>
                 <CashierPage />

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useProfile } from '@/hooks/useProfile'
 import { supabaseBrowserClient } from '@/lib/supabase/browser-client'
 
 type Daily = { d: string; c: number }
@@ -29,10 +30,12 @@ type Retention = { active_customers_window: number; total_customers: number }
 
 export function HqAnalyticsCharts() {
   const { t } = useI18n()
+  const { data: profile } = useProfile()
+  const cafeId = profile?.cafe_id ?? null
 
   const q = useQuery({
-    queryKey: ['hq-analytics-series'],
-    enabled: Boolean(supabaseBrowserClient),
+    queryKey: ['hq-analytics-series', cafeId],
+    enabled: Boolean(supabaseBrowserClient && cafeId),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc('hq_analytics_series', {
         p_days: 30,

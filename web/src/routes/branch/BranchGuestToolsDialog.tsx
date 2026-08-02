@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useProfile } from '@/hooks/useProfile'
 import { supabaseBrowserClient } from '@/lib/supabase/browser-client'
 import { cn } from '@/lib/utils'
 
@@ -45,6 +46,9 @@ type Props = {
 export function BranchGuestToolsDialog({ guest, onClose }: Props) {
   const { t, locale } = useI18n()
   const qc = useQueryClient()
+  const { data: profile } = useProfile()
+  const branchId = profile?.branch_id ?? null
+  const cafeId = profile?.cafe_id ?? null
   const [adjustStreak, setAdjustStreak] = useState('')
   const [adjustNote, setAdjustNote] = useState('')
 
@@ -55,8 +59,8 @@ export function BranchGuestToolsDialog({ guest, onClose }: Props) {
   }, [guest])
 
   const lifetimeQuery = useQuery({
-    queryKey: ['branch-manager-lifetime-rewards', guest?.id],
-    enabled: Boolean(supabaseBrowserClient && guest?.id),
+    queryKey: ['branch-manager-lifetime-rewards', branchId, cafeId, guest?.id],
+    enabled: Boolean(supabaseBrowserClient && guest?.id && branchId),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!.rpc(
         'branch_manager_list_customer_lifetime_rewards_secure',
@@ -89,8 +93,8 @@ export function BranchGuestToolsDialog({ guest, onClose }: Props) {
     },
     onSuccess: async () => {
       toast.success(t('branch.adjust.success'))
-      await qc.invalidateQueries({ queryKey: ['branch-manager-customers'] })
-      await qc.invalidateQueries({ queryKey: ['branch-manager-stats'] })
+      await qc.invalidateQueries({ queryKey: ['branch-manager-customers', branchId, cafeId] })
+      await qc.invalidateQueries({ queryKey: ['branch-manager-stats', branchId, cafeId] })
     },
     onError: () => toast.error(t('branch.adjust.fail')),
   })
@@ -112,8 +116,10 @@ export function BranchGuestToolsDialog({ guest, onClose }: Props) {
     },
     onSuccess: async () => {
       toast.success(t('branch.ops.rewardResetOk'))
-      await qc.invalidateQueries({ queryKey: ['branch-manager-lifetime-rewards', guest?.id] })
-      await qc.invalidateQueries({ queryKey: ['branch-manager-customers'] })
+      await qc.invalidateQueries({
+        queryKey: ['branch-manager-lifetime-rewards', branchId, cafeId, guest?.id],
+      })
+      await qc.invalidateQueries({ queryKey: ['branch-manager-customers', branchId, cafeId] })
     },
     onError: () => toast.error(t('branch.ops.rewardResetFail')),
   })

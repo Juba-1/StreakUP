@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +19,7 @@ type Props = {
 export function TenantActionMenu({ cafeId, slug, name, onSuspend, suspending }: Props) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
+  const [suspendOpen, setSuspendOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,9 +68,7 @@ export function TenantActionMenu({ cafeId, slug, name, onSuspend, suspending }: 
             disabled={suspending}
             onClick={() => {
               setOpen(false)
-              if (window.confirm(t('admin.tenants.actions.suspendConfirm').replace('{name}', name))) {
-                onSuspend()
-              }
+              setSuspendOpen(true)
             }}
           >
             <ShieldOff className="size-3.5" aria-hidden />
@@ -87,11 +87,23 @@ export function TenantActionMenu({ cafeId, slug, name, onSuspend, suspending }: 
             <UserCog className="size-3.5 text-sky-300" aria-hidden />
             {t('admin.tenants.actions.impersonate')}
           </button>
-          <p className="border-t border-white/8 px-3 py-2 font-mono text-[9px] text-white/30" dir="ltr">
+          <p className="border-t border-white/8 px-3 py-2 font-mono text-[10px] text-white/40" dir="ltr">
             {cafeId.slice(0, 8)}…
           </p>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={suspendOpen}
+        onOpenChange={setSuspendOpen}
+        tone="danger"
+        title={t('common.confirmTitle')}
+        description={t('admin.tenants.actions.suspendConfirm').replace('{name}', name)}
+        pending={suspending}
+        onConfirm={() => {
+          onSuspend()
+          setSuspendOpen(false)
+        }}
+      />
     </div>
   )
 }

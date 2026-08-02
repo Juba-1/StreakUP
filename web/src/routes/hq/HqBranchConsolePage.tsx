@@ -51,12 +51,13 @@ export function HqBranchConsolePage() {
   })
 
   const visits = useQuery({
-    queryKey: ['hq-branch-visits', branchQuery.data?.id],
-    enabled: Boolean(supabaseBrowserClient && branchQuery.data?.id),
+    queryKey: ['hq-branch-visits', profile?.cafe_id, branchQuery.data?.id],
+    enabled: Boolean(supabaseBrowserClient && branchQuery.data?.id && profile?.cafe_id),
     queryFn: async () => {
       const { data, error } = await supabaseBrowserClient!
         .from('visits')
         .select('id, visit_date, streak_after, created_at, customer_id, customers(phone)')
+        .eq('cafe_id', profile!.cafe_id!)
         .eq('branch_id', branchQuery.data!.id)
         .order('created_at', { ascending: false })
         .limit(40)

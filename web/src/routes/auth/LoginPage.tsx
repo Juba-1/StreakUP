@@ -23,6 +23,7 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { useProfile } from '@/hooks/useProfile'
 import { useStaffDashboardPath } from '@/hooks/useStaffDashboardPath'
 import { recordLegalConsent } from '@/lib/legal/record-consent'
+import { clearTenantQueryCaches } from '@/lib/clearTenantQueryCaches'
 import {
   getLockoutMsRemaining,
   LOGIN_WINDOW,
@@ -344,6 +345,7 @@ export function LoginPage() {
       return
     }
 
+    await clearTenantQueryCaches(qc)
     await qc.invalidateQueries({ queryKey: ['profile'] })
     await qc.invalidateQueries({ queryKey: ['staff-dashboard-path'] })
     const boot = await fetchStaffBootstrap(supabase)
@@ -436,7 +438,11 @@ export function LoginPage() {
             id="staff-legal-consent"
           />
 
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          {error ? (
+            <p className="text-destructive text-sm" role="alert">
+              {error}
+            </p>
+          ) : null}
 
           <div className="text-end">
             <button

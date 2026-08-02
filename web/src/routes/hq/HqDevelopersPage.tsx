@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -51,6 +52,8 @@ export function HqDevelopersPage() {
   const [hookLabel, setHookLabel] = useState('pos-bridge')
   const [evVisit, setEvVisit] = useState(true)
   const [evReward, setEvReward] = useState(true)
+  const [revokeTarget, setRevokeTarget] = useState<string | null>(null)
+  const [deleteHookTarget, setDeleteHookTarget] = useState<string | null>(null)
 
   const cafeQuery = useQuery({
     queryKey: ['hq-cafe', profile?.cafe_id],
@@ -523,9 +526,7 @@ export function HqDevelopersPage() {
                               size="sm"
                               variant="destructive"
                               disabled={revoke.isPending || keysLocked}
-                              onClick={() => {
-                                if (window.confirm(t('hq.api.revokeConfirm'))) void revoke.mutateAsync(k.id)
-                              }}
+                              onClick={() => setRevokeTarget(k.id)}
                             >
                               <Trash2 className="size-3.5" />
                               <span className="ms-1">{t('hq.api.revoke')}</span>
@@ -648,9 +649,7 @@ export function HqDevelopersPage() {
                             size="sm"
                             variant="destructive"
                             disabled={deleteHook.isPending || hooksLocked}
-                            onClick={() => {
-                              if (window.confirm(t('hq.webhooks.deleteConfirm'))) void deleteHook.mutateAsync(h.id)
-                            }}
+                            onClick={() => setDeleteHookTarget(h.id)}
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -664,6 +663,38 @@ export function HqDevelopersPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null)
+        }}
+        tone="danger"
+        title={t('common.confirmTitle')}
+        description={t('hq.api.revokeConfirm')}
+        pending={revoke.isPending}
+        onConfirm={async () => {
+          if (!revokeTarget) return
+          await revoke.mutateAsync(revokeTarget)
+          setRevokeTarget(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteHookTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteHookTarget(null)
+        }}
+        tone="danger"
+        title={t('common.confirmTitle')}
+        description={t('hq.webhooks.deleteConfirm')}
+        pending={deleteHook.isPending}
+        onConfirm={async () => {
+          if (!deleteHookTarget) return
+          await deleteHook.mutateAsync(deleteHookTarget)
+          setDeleteHookTarget(null)
+        }}
+      />
     </div>
   )
 }

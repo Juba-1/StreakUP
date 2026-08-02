@@ -7,9 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { invokeAiRouter } from '@/core/ai/router'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useProfile } from '@/hooks/useProfile'
 import { supabaseBrowserClient } from '@/lib/supabase/browser-client'
-
-const DISMISS_KEY = 'streakup.hq.pulse.dismiss'
 
 type Props = {
   /** When false (e.g. zero branches), pulse is hidden. */
@@ -18,16 +17,19 @@ type Props = {
 
 export function HqPulseBanner({ enabled }: Props) {
   const { t, locale } = useI18n()
-  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem(DISMISS_KEY) === '1')
+  const { data: profile } = useProfile()
+  const cafeId = profile?.cafe_id ?? null
+  const dismissKey = cafeId ? `streakup.hq.pulse.dismiss:${cafeId}` : 'streakup.hq.pulse.dismiss'
+  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem(dismissKey) === '1')
 
   const dismiss = useCallback(() => {
-    sessionStorage.setItem(DISMISS_KEY, '1')
+    sessionStorage.setItem(dismissKey, '1')
     setDismissed(true)
-  }, [])
+  }, [dismissKey])
 
   const pulse = useQuery({
-    queryKey: ['hq-live-pulse', locale],
-    enabled: enabled && !dismissed && Boolean(supabaseBrowserClient),
+    queryKey: ['hq-live-pulse', cafeId, locale],
+    enabled: enabled && !dismissed && Boolean(supabaseBrowserClient && cafeId),
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     retry: 1,

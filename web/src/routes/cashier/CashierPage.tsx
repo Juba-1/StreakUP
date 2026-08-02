@@ -10,33 +10,42 @@ import {
 } from '@/lib/cashierDeviceUnlock'
 
 export function CashierPage() {
-  const { branchCode } = useParams()
+  const { cafeSlug, branchCode } = useParams()
+  const slug = (cafeSlug ?? '').toLowerCase()
   const code = (branchCode ?? '').toLowerCase()
 
   const [session, setSession] = useState<CashierDeviceSession | null>(() =>
-    code ? readCashierDeviceSession(code) : null,
+    slug && code ? readCashierDeviceSession(slug, code) : null,
   )
 
   useEffect(() => {
-    if (!code) return
-    setSession(readCashierDeviceSession(code))
-  }, [code])
+    if (!slug || !code) return
+    const next = readCashierDeviceSession(slug, code)
+    if (
+      next &&
+      (next.cafeSlug.toLowerCase() !== slug || next.branchCode.toLowerCase() !== code)
+    ) {
+      setSession(null)
+      return
+    }
+    setSession(next)
+  }, [slug, code])
 
   const handleUnlocked = useCallback(
     (next: CashierDeviceSession) => {
-      writeCashierDeviceSession(code, next)
+      writeCashierDeviceSession(slug, code, next)
       setSession(next)
     },
-    [code],
+    [slug, code],
   )
 
-  if (!code) {
+  if (!slug || !code) {
     return null
   }
 
   if (!session?.token) {
-    return <CashierLockScreen branchCode={code} onUnlocked={handleUnlocked} />
+    return <CashierLockScreen cafeSlug={slug} branchCode={code} onUnlocked={handleUnlocked} />
   }
 
-  return <CashierHomePage deviceSession={session} branchCode={code} />
+  return <CashierHomePage deviceSession={session} cafeSlug={slug} branchCode={code} />
 }
